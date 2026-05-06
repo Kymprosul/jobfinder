@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Jobfinder Académico
 
 Webapp MVP para rastrear ofertas académicas/docentes desde varias fuentes, filtrar por relevancia y enviar un reporte diario por email.
@@ -168,3 +169,7 @@ La deduplicación ya usa `id` y fingerprint estables, lo que facilita índices �
 - No hay autenticación de usuarios.
 - No hay cola de tareas ni panel multiusuario.
 - El filtrado es heurístico y configurable, pero no incorpora NLP ni clasificación avanzada.
+=======
+# jobfinder
+Lightweight web app that aggregates, filters, deduplicates, and delivers relevant academic job listings from multiple sources via automated daily reports
+>>>>>>> origin/main
