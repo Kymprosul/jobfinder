@@ -1,0 +1,15 @@
+{
+  "name": "jobfinder-collectors",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "collect": "node src/run.js",
+    "collect:echinacities": "node src/run.js echinacities",
+    "collect:jobscina": "node src/run.js jobscina",
+    "collect:hiredchina": "node src/run.js hiredchina",
+    "collect:chinateachjobs": "node src/run.js chinateachjobs"
+  },
+  "dependencies": {
+    "playwright": "^1.44.0"
+  }
+}

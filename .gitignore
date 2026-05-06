@@ -1,0 +1,53 @@
+# --- Dependencias ---
+backend/vendor/
+frontend/node_modules/
+collectors/playwright/node_modules/
+
+# --- Entorno / credenciales ---
+backend/.env
+frontend/.env
+*.env.local
+*.env.*.local
+
+# --- Builds / distribución ---
+frontend/dist/
+hostinger/
+
+# --- Almacenamiento local (datos generados) ---
+backend/storage/*.json
+backend/storage/*.lock
+
+# --- Logs y temporales ---
+*.log
+.php_server_err.log
+.php_server_out.log
+tmp-*.png
+tmp-*.jpg
+*.tmp
+
+# --- Playwright output ---
+collectors/playwright/output/
+collectors/playwright/test-results/
+
+# --- Sistema operativo ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- IDEs / editores ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Archivos de versiones antiguas (zip) ---
+*.zip
+
+# --- Archivos de prueba / temporales HTML ---
+_echina.html
+echina.html
+echina_search.html
+
+# --- Composer phar ---
+backend/composer.phar

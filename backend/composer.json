@@ -1,0 +1,17 @@
+{
+  "name": "jobfinder/backend",
+  "description": "Backend PHP para rastreo y reporte diario de ofertas académicas",
+  "type": "project",
+  "require": {
+    "php": "^8.2",
+    "guzzlehttp/guzzle": "^7.9",
+    "phpmailer/phpmailer": "^6.9",
+    "symfony/dom-crawler": "^7.2",
+    "symfony/css-selector": "^7.2"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "src/"
+    }
+  }
+}
