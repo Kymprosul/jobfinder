@@ -51,3 +51,4 @@ echina_search.html
 
 # --- Composer phar ---
 backend/composer.phar
+__pycache__/
