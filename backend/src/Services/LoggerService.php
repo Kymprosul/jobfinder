@@ -9,6 +9,8 @@ use App\Storage\StorageInterface;
 final class LoggerService
 {
     private array $contextStack = [];
+    private array $buffer = [];
+    private bool $isBuffering = false;
 
     public function __construct(private readonly StorageInterface $storage)
     {
@@ -40,11 +42,31 @@ final class LoggerService
         }
     }
 
+    public function startBuffering(): void
+    {
+        $this->isBuffering = true;
+        $this->buffer = [];
+    }
+
+    public function flush(): void
+    {
+        if ($this->buffer === []) {
+            $this->isBuffering = false;
+
+            return;
+        }
+
+        $logs = $this->storage->load('logs', []);
+        $logs = array_merge($logs, $this->buffer);
+        $this->storage->save('logs', array_slice($logs, -3000));
+        $this->buffer = [];
+        $this->isBuffering = false;
+    }
+
     private function write(string $level, string $message, array $context): void
     {
         $mergedContext = array_merge($this->currentContext(), $context);
-        $logs = $this->storage->load('logs', []);
-        $logs[] = [
+        $entry = [
             'timestamp' => (new \DateTimeImmutable('now'))->format(DATE_ATOM),
             'level' => $level,
             'message' => $message,
@@ -54,6 +76,15 @@ final class LoggerService
             'stage' => $mergedContext['stage'] ?? null,
             'context' => $mergedContext,
         ];
+
+        if ($this->isBuffering) {
+            $this->buffer[] = $entry;
+
+            return;
+        }
+
+        $logs = $this->storage->load('logs', []);
+        $logs[] = $entry;
         $this->storage->save('logs', array_slice($logs, -3000));
     }
 

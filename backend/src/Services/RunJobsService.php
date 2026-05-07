@@ -42,6 +42,18 @@ final class RunJobsService
             'run_id' => $runId,
             'trigger' => $trigger,
         ], function () use ($config, $startedAt, $trigger, $runId): array {
+            $this->logger->startBuffering();
+
+            try {
+                return $this->executeRun($config, $startedAt, $trigger, $runId);
+            } finally {
+                $this->logger->flush();
+            }
+        });
+    }
+
+    private function executeRun(array $config, \DateTimeImmutable $startedAt, string $trigger, string $runId): array
+    {
             $searchLabels = array_values(array_filter(array_map(
                 static fn (array $search): string => trim((string) ($search['label'] ?? '')),
                 $config['searches'] ?? []
@@ -214,7 +226,6 @@ final class RunJobsService
             ]);
 
             return $summary;
-        });
     }
 
     public function sendPendingReport(string $trigger = 'manual-send'): array

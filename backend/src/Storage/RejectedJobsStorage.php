@@ -8,6 +8,17 @@ use RuntimeException;
 
 final class RejectedJobsStorage
 {
+    private ?array $cache = null;
+
+    /** @var array<string, true> */
+    private array $dedupeKeys = [];
+
+    /** @var array<string, true> */
+    private array $overlapKeys = [];
+
+    /** @var array<string, true> */
+    private array $cleanUrls = [];
+
     public function __construct(private readonly string $basePath)
     {
         if (!is_dir($basePath) && !mkdir($basePath, 0755, true) && !is_dir($basePath)) {
@@ -17,21 +28,30 @@ final class RejectedJobsStorage
 
     public function load(): array
     {
+        if ($this->cache !== null) {
+            return $this->cache;
+        }
+
         $path = $this->resolvePath();
         if (!file_exists($path)) {
             $this->save([]);
+            $this->cache = [];
 
             return [];
         }
 
         $content = @file_get_contents($path);
         if ($content === false || trim($content) === '') {
+            $this->cache = [];
+
             return [];
         }
 
         $decoded = json_decode($content, true);
+        $this->cache = is_array($decoded) ? $decoded : [];
+        $this->rebuildIndex();
 
-        return is_array($decoded) ? $decoded : [];
+        return $this->cache;
     }
 
     public function save(array $rejected): void
@@ -59,28 +79,30 @@ final class RejectedJobsStorage
             @unlink($tempPath);
             throw new RuntimeException('No se pudo persistir rejected_jobs');
         }
+
+        $this->cache = $rejected;
+        $this->rebuildIndex();
     }
 
     public function isRejected(array $job): bool
     {
-        $rejected = $this->load();
+        if ($this->cache === null) {
+            $this->load();
+        }
 
-        foreach ($rejected as $entry) {
-            if (!is_array($entry)) {
-                continue;
-            }
+        $key = $this->toNullableString($job['dedupe_key'] ?? null);
+        if ($key !== null && isset($this->dedupeKeys[$key])) {
+            return true;
+        }
 
-            if ($this->matchesByKey($entry, $job, 'dedupe_key')) {
-                return true;
-            }
+        $key = $this->toNullableString($job['overlap_key'] ?? null);
+        if ($key !== null && isset($this->overlapKeys[$key])) {
+            return true;
+        }
 
-            if ($this->matchesByKey($entry, $job, 'overlap_key')) {
-                return true;
-            }
-
-            if ($this->matchesByKey($entry, $job, 'clean_url')) {
-                return true;
-            }
+        $key = $this->toNullableString($job['clean_url'] ?? null);
+        if ($key !== null && isset($this->cleanUrls[$key])) {
+            return true;
         }
 
         return false;
@@ -110,16 +132,36 @@ final class RejectedJobsStorage
         $this->save($rejected);
     }
 
-    private function matchesByKey(array $entry, array $job, string $key): bool
+    private function rebuildIndex(): void
     {
-        $entryValue = $this->toNullableString($entry[$key] ?? null);
-        $jobValue = $this->toNullableString($job[$key] ?? null);
+        $this->dedupeKeys = [];
+        $this->overlapKeys = [];
+        $this->cleanUrls = [];
 
-        if ($entryValue === null || $jobValue === null) {
-            return false;
+        if ($this->cache === null) {
+            return;
         }
 
-        return $entryValue === $jobValue;
+        foreach ($this->cache as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+
+            $key = $this->toNullableString($entry['dedupe_key'] ?? null);
+            if ($key !== null) {
+                $this->dedupeKeys[$key] = true;
+            }
+
+            $key = $this->toNullableString($entry['overlap_key'] ?? null);
+            if ($key !== null) {
+                $this->overlapKeys[$key] = true;
+            }
+
+            $key = $this->toNullableString($entry['clean_url'] ?? null);
+            if ($key !== null) {
+                $this->cleanUrls[$key] = true;
+            }
+        }
     }
 
     private function toNullableString(mixed $value): ?string
