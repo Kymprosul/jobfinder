@@ -17,7 +17,20 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timezone
 
-JOBINDER_API = os.environ.get("JOBFINDER_API", "https://jobfinder.kymprosul.com/api/import")
+JOBFINDER_API = os.environ.get("JOBFINDER_API", "https://jobfinder.kymprosul.com/api")
+JOBINDER_IMPORT = f"{JOBFINDER_API}/import"
+
+
+def get_scraper_config() -> dict:
+    """Fetch playwright_scraper config from Jobfinder API."""
+    try:
+        req = urllib.request.Request(f"{JOBFINDER_API}/config", method="GET")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            return data.get("data", {}).get("playwright_scraper", {})
+    except Exception as e:
+        print(f"[config] Could not fetch config: {e}, using defaults")
+        return {}
 
 
 def post_jobs(jobs: list, source: str) -> dict:
@@ -28,7 +41,7 @@ def post_jobs(jobs: list, source: str) -> dict:
 
     data = json.dumps(jobs, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(
-        JOBINDER_API,
+        JOBINDER_IMPORT,
         data=data,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -341,27 +354,47 @@ def scrape_higheredjobs() -> list:
     return normalized
 
 
+SCRAPER_MAP = {
+    "hiredchina": scrape_hiredchina,
+    "higheredjobs": scrape_higheredjobs,
+}
+
+
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python3 scrape_playwright.py [hiredchina|higheredjobs|all]")
-        sys.exit(1)
+    # Read config from Jobfinder API
+    config = get_scraper_config()
+    api_url = config.get("api_url", "")
+    if api_url:
+        global JOBINDER_IMPORT
+        JOBINDER_IMPORT = api_url.rstrip("/") + "/api/import"
+        print(f"[config] Using API: {JOBINDER_IMPORT}")
 
-    target = sys.argv[1].lower()
+    # Determine which sources to scrape
+    if len(sys.argv) >= 2:
+        target = sys.argv[1].lower()
+    else:
+        # Read from config
+        sources = config.get("sources", ["hiredchina", "higheredjobs"])
+        target = "all"
+        print(f"[config] Sources from config: {sources}")
+
     all_jobs = []
+    sources_to_run = config.get("sources", list(SCRAPER_MAP.keys()))
 
-    if target in ("hiredchina", "all"):
-        print("\n=== HiredChina ===")
-        jobs = scrape_hiredchina()
-        if jobs:
-            post_jobs(jobs, "hiredchina")
-        all_jobs.extend(jobs)
+    for source_name, scraper_fn in SCRAPER_MAP.items():
+        if target not in (source_name, "all"):
+            continue
+        if target == "all" and source_name not in sources_to_run:
+            continue
 
-    if target in ("higheredjobs", "all"):
-        print("\n=== HigherEdJobs ===")
-        jobs = scrape_higheredjobs()
-        if jobs:
-            post_jobs(jobs, "higheredjobs")
-        all_jobs.extend(jobs)
+        print(f"\n=== {source_name} ===")
+        try:
+            jobs = scraper_fn()
+            if jobs:
+                post_jobs(jobs, source_name)
+            all_jobs.extend(jobs)
+        except Exception as e:
+            print(f"[{source_name}] ERROR: {e}")
 
     print(f"\n=== Total: {len(all_jobs)} jobs imported ===")
 

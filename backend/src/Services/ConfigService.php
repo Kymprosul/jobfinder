@@ -62,6 +62,13 @@ final class ConfigService
             $merged['keywords'] = $input['keywords'];
         }
 
+        if (isset($input['playwright_scraper']) && is_array($input['playwright_scraper'])) {
+            $merged['playwright_scraper'] = $this->sanitizePlaywrightConfig(
+                $input['playwright_scraper'],
+                $current['playwright_scraper'] ?? $this->defaults()['playwright_scraper']
+            );
+        }
+
         $merged = $this->normalizeConfig($merged);
         $nextSearchKeys = $this->extractSearchKeys($merged);
         $removedSearchKeys = array_values(array_diff($currentSearchKeys, $nextSearchKeys));
@@ -118,6 +125,9 @@ final class ConfigService
         $config['searches'] = $searches;
         $config['filters'] = $this->buildLegacyFilters($searches, $legacyFilters);
         $config['keywords'] = $this->buildLegacyKeywords($searches, $legacyKeywords);
+        $config['playwright_scraper'] = $this->normalizePlaywrightConfig(
+            is_array($config['playwright_scraper'] ?? null) ? $config['playwright_scraper'] : []
+        );
 
         return $config;
     }
@@ -699,6 +709,38 @@ final class ConfigService
     /**
      * @return array{0: ?array<string, int>, 1: int}
      */
+    private function normalizePlaywrightConfig(array $pw): array
+    {
+        $defaults = $this->defaults()['playwright_scraper'];
+
+        return [
+            'enabled' => (bool) ($pw['enabled'] ?? $defaults['enabled']),
+            'vps_host' => trim((string) ($pw['vps_host'] ?? '')),
+            'vps_port' => $this->clampInt($pw['vps_port'] ?? 22, 1, 65535, 22),
+            'vps_user' => trim((string) ($pw['vps_user'] ?? '')),
+            'scraper_path' => trim((string) ($pw['scraper_path'] ?? $defaults['scraper_path'])),
+            'api_url' => $this->sanitizeHttpUrl($pw['api_url'] ?? ''),
+            'sources' => $this->sanitizeStringList($pw['sources'] ?? $defaults['sources']),
+            'cron_schedule' => trim((string) ($pw['cron_schedule'] ?? $defaults['cron_schedule'])),
+        ];
+    }
+
+    private function sanitizePlaywrightConfig(array $input, array $shape): array
+    {
+        $defaults = $this->defaults()['playwright_scraper'];
+
+        return [
+            'enabled' => (bool) ($input['enabled'] ?? $shape['enabled'] ?? $defaults['enabled']),
+            'vps_host' => trim((string) ($input['vps_host'] ?? $shape['vps_host'] ?? '')),
+            'vps_port' => $this->clampInt($input['vps_port'] ?? $shape['vps_port'] ?? 22, 1, 65535, 22),
+            'vps_user' => trim((string) ($input['vps_user'] ?? $shape['vps_user'] ?? '')),
+            'scraper_path' => trim((string) ($input['scraper_path'] ?? $shape['scraper_path'] ?? $defaults['scraper_path'])),
+            'api_url' => $this->sanitizeHttpUrl($input['api_url'] ?? $shape['api_url'] ?? ''),
+            'sources' => $this->sanitizeStringList($input['sources'] ?? $shape['sources'] ?? $defaults['sources']),
+            'cron_schedule' => trim((string) ($input['cron_schedule'] ?? $shape['cron_schedule'] ?? $defaults['cron_schedule'])),
+        ];
+    }
+
     private function pruneSearchCounters(mixed $counters, array $removedSearchMap): array
     {
         if (!is_array($counters)) {
@@ -813,6 +855,16 @@ final class ConfigService
                     'search_url' => 'https://www.chinateachjobs.com/jobs/?s=spanish&category=',
                     'public_url' => 'https://www.chinateachjobs.com/jobs/?s=spanish&category=',
                 ],
+            ],
+            'playwright_scraper' => [
+                'enabled' => false,
+                'vps_host' => '',
+                'vps_port' => 22,
+                'vps_user' => '',
+                'scraper_path' => '/tmp/jobfinder/scrapers/scrape_playwright.py',
+                'api_url' => '',
+                'sources' => ['hiredchina', 'higheredjobs'],
+                'cron_schedule' => '0 6 * * *',
             ],
         ];
     }
