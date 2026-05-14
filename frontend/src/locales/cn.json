@@ -85,7 +85,10 @@
       "duplicatesDiscarded": "去重丢弃",
       "tooOld": "因过旧丢弃"
     },
-    "sources": "来源"
+    "sources": "来源",
+    "updatingSource": "正在更新 {current}/{total}: {source}...",
+    "updatingSummary": "{current}/{total} 个源已处理 — {accepted} 个已接受, {new} 个新",
+    "updatingDone": "完成: {total} 个源已处理, {new} 个新. {errors} 个错误."
   },
   "config": {
     "eyebrow": "设置",

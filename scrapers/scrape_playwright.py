@@ -71,7 +71,7 @@ def scrape_hiredchina() -> list:
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
-            headless=False,
+            headless=True,
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
@@ -196,7 +196,7 @@ def scrape_hiredchina() -> list:
                 "description": " | ".join(
                     filter(None, [j.get("salary", ""), j.get("category", ""), j.get("location", "")])
                 ),
-                "posted_date": posted_date,
+                "posted_date": None,
                 "closing_date": None,
                 "category": "international_business",
                 "raw_meta": {
@@ -337,7 +337,7 @@ def scrape_higheredjobs() -> list:
                 "location": j.get("location", ""),
                 "url": j["url"],
                 "description": j.get("fullText", j["title"])[:600],
-                "posted_date": posted_date,
+                "posted_date": None,
                 "closing_date": None,
                 "category": "international_business",
                 "raw_meta": {
@@ -395,6 +395,59 @@ def main():
             all_jobs.extend(jobs)
         except Exception as e:
             print(f"[{source_name}] ERROR: {e}")
+
+    # Save today's offers locally for the daily report cron
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    offers_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "today_offers.json")
+    try:
+        # Load existing to avoid overwriting if run multiple times
+        existing = []
+        if os.path.exists(offers_path):
+            with open(offers_path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+
+        # Add date tag to each offer
+        for j in all_jobs:
+            j["_scrape_date"] = today_str
+
+        # Merge: keep offers from today + older ones we haven't sent yet (max 3 days)
+        from datetime import timedelta
+        cutoff = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+        merged = [j for j in existing if j.get("_scrape_date", "") >= cutoff]
+
+        # Deduplicate by url
+        seen_urls = {j["url"] for j in merged}
+        new_count = 0
+        for j in all_jobs:
+            if j["url"] not in seen_urls:
+                merged.append(j)
+                seen_urls.add(j["url"])
+                new_count += 1
+
+        with open(offers_path, "w", encoding="utf-8") as f:
+            json.dump(merged, f, ensure_ascii=False, indent=2)
+        print(f"[local] Saved {len(merged)} offers to {offers_path} ({new_count} new)")
+    except Exception as e:
+        print(f"[local] Error saving offers: {e}")
+
+    # Also update last_scrape.json with detail
+    last_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "last_scrape.json")
+    try:
+        summary = {
+            "date": today_str,
+            "new_offers": len(all_jobs),
+            "sources": {},
+            "scraped": {},
+            "total_scraped": len(all_jobs),
+            "offers_saved": len(all_jobs),
+        }
+        for j in all_jobs:
+            src = j.get("source", "unknown")
+            summary["sources"][src] = summary["sources"].get(src, 0) + 1
+        with open(last_path, "w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
     print(f"\n=== Total: {len(all_jobs)} jobs imported ===")
 

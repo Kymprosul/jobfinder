@@ -85,7 +85,10 @@
       "duplicatesDiscarded": "Discarded duplicates",
       "tooOld": "Discarded by age"
     },
-    "sources": "Sources"
+    "sources": "Sources",
+    "updatingSource": "Updating {current}/{total}: {source}...",
+    "updatingSummary": "{current}/{total} sources processed — {accepted} accepted, {new} new",
+    "updatingDone": "Done: {total} sources processed, {new} new. {errors} errors."
   },
   "config": {
     "eyebrow": "Settings",

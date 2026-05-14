@@ -85,7 +85,10 @@
       "duplicatesDiscarded": "Duplicadas descartadas",
       "tooOld": "Descartadas por antigüedad"
     },
-    "sources": "Fuentes"
+    "sources": "Fuentes",
+    "updatingSource": "Actualizando {current}/{total}: {source}...",
+    "updatingSummary": "{current}/{total} fuentes procesadas — {accepted} aceptadas, {new} nuevas",
+    "updatingDone": "Completado: {total} fuentes procesadas, {new} nuevas. {errors} errores."
   },
   "config": {
     "eyebrow": "Ajustes",

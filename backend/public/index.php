@@ -104,6 +104,25 @@ if ($method === 'POST' && preg_match('#^/jobs/([^/]+)/reject$#', $path, $matches
     $handleRejectRoute(urldecode((string) ($matches[1] ?? '')));
 }
 
+// POST /api/run/{source} — run a single scraper
+if ($method === 'POST' && preg_match('#^/api/run/([^/]+)$#', $path, $matches) === 1) {
+    $sourceKey = urldecode((string) ($matches[1] ?? ''));
+    try {
+        $response = $controller->runSource($sourceKey);
+        http_response_code($response['status'] ?? 200);
+        unset($response['status']);
+        echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    } catch (Throwable $exception) {
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Error interno del servidor',
+            'message' => $appDebug ? $exception->getMessage() : null,
+        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    }
+    exit;
+}
+
 $key = sprintf('%s %s', $method, $path);
 
 if (!isset($routes[$key])) {

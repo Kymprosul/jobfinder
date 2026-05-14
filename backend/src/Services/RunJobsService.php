@@ -228,6 +228,94 @@ final class RunJobsService
             return $summary;
     }
 
+    public function runSource(string $sourceKey): array
+    {
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(30);
+        }
+
+        $config = $this->configService->get();
+        $sourceConfig = $config['sources'][$sourceKey] ?? null;
+
+        if ($sourceConfig === null) {
+            throw new \InvalidArgumentException("Fuente desconocida: {$sourceKey}");
+        }
+
+        $scraper = null;
+        foreach ($this->scrapers as $s) {
+            if ($s->getSourceKey() === $sourceKey) {
+                $scraper = $s;
+                break;
+            }
+        }
+
+        if ($scraper === null) {
+            throw new \InvalidArgumentException("Scraper no encontrado: {$sourceKey}");
+        }
+
+        $startedAt = new \DateTimeImmutable('now');
+        $this->logger->info("Scraping individual: {$sourceKey}", [
+            'stage' => 'source_start',
+            'source' => $sourceKey,
+        ]);
+
+        $result = $scraper->scrape($config);
+        $normalizedJobs = array_map(fn (array $job): array => $this->normalizer->normalize($job), $result->jobs);
+
+        $filtered = $this->filterService->filter($normalizedJobs, $config);
+        $acceptedNotRejected = array_values(array_filter(
+            $filtered['accepted'],
+            fn (array $job): bool => !$this->rejectedJobsStorage->isRejected($job)
+        ));
+
+        $existingJobs = $this->storage->load('jobs', []);
+        $merged = $this->deduplicationService->merge($existingJobs, $acceptedNotRejected);
+        $jobs = $merged['jobs'];
+        usort($jobs, static fn (array $a, array $b): int => strcmp($b['last_seen_at'] ?? '', $a['last_seen_at'] ?? ''));
+        $this->storage->save('jobs', $jobs);
+
+        $previewJobs = array_map(static function (array $evaluated): array {
+            $job = $evaluated['job'];
+            $job['accepted'] = $evaluated['accepted'];
+            $job['rejection_reason'] = $evaluated['accepted'] ? null : ($evaluated['reason'] ?? 'irrelevant');
+            return $job;
+        }, $filtered['evaluated']);
+
+        $existingPreview = $this->storage->load('preview_jobs', []);
+        $mergedPreview = array_merge($existingPreview, $previewJobs);
+        usort($mergedPreview, static fn (array $a, array $b): int => ($b['score'] ?? 0) <=> ($a['score'] ?? 0));
+        $this->storage->save('preview_jobs', array_slice($mergedPreview, -500));
+
+        $newJobs = array_values(array_filter(
+            $merged['new_jobs'],
+            static fn (array $job): bool => !($job['sent'] ?? false)
+        ));
+
+        $finishedAt = new \DateTimeImmutable('now');
+        $durationMs = $this->durationMs($startedAt, $finishedAt);
+
+        $this->logger->info("Scraping individual completado: {$sourceKey}", [
+            'stage' => 'source_finish',
+            'source' => $sourceKey,
+            'status' => $result->status,
+            'jobs_count' => count($result->jobs),
+            'new_jobs' => count($newJobs),
+            'duration_ms' => $durationMs,
+        ]);
+
+        return [
+            'success' => true,
+            'source' => $sourceKey,
+            'status' => $result->status,
+            'jobs_count' => count($result->jobs),
+            'accepted' => count($acceptedNotRejected),
+            'new' => count($newJobs),
+            'duplicates' => $merged['duplicates_discarded'],
+            'message' => $result->message,
+            'duration_ms' => $durationMs,
+        ];
+    }
+
     public function sendPendingReport(string $trigger = 'manual-send'): array
     {
         return $this->logger->withContext([

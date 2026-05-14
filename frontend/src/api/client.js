@@ -87,6 +87,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({}),
     }),
+  runSource: (source) =>
+    request(`/api/run/${encodeURIComponent(source)}`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   sendReport: () =>
     request('/api/send-report', {
       method: 'POST',

@@ -36,17 +36,75 @@ const sourceErrors = computed(
 const loading = computed(() => loadingAppData.value)
 const visibleError = computed(() => error.value || appDataError.value)
 
-async function runNow() {
+// --- Progress tracking ---
+const progressActive = ref(false)
+const progressTotal = ref(0)
+const progressCurrent = ref(0)
+const progressSource = ref('')
+const progressResults = ref([])
+const progressErrors = ref([])
+
+const progressPercent = computed(() => {
+  if (progressTotal.value === 0) return 0
+  return Math.round((progressCurrent.value / progressTotal.value) * 100)
+})
+
+const progressSummary = computed(() => {
+  if (!progressActive.value && progressResults.value.length === 0) return ''
+  const totalNew = progressResults.value.reduce((sum, r) => sum + (r.data?.new || 0), 0)
+  const totalAccepted = progressResults.value.reduce((sum, r) => sum + (r.data?.accepted || 0), 0)
+  return t('dashboard.updatingSummary', {
+    current: progressCurrent.value,
+    total: progressTotal.value,
+    accepted: totalAccepted,
+    new: totalNew,
+  })
+})
+
+const enabledSources = computed(() => {
+  const sources = config.value?.sources || {}
+  return Object.entries(sources)
+    .filter(([, src]) => src.enabled)
+    .map(([key]) => key)
+})
+
+async function updateAllSources() {
   running.value = true
   error.value = ''
-  try {
-    await api.runNow()
-    await loadAll({ force: true })
-  } catch (err) {
-    error.value = err.message
-  } finally {
-    running.value = false
+  progressActive.value = true
+  progressResults.value = []
+  progressErrors.value = []
+
+  const sources = enabledSources.value
+  progressTotal.value = sources.length
+  progressCurrent.value = 0
+
+  for (let i = 0; i < sources.length; i++) {
+    const source = sources[i]
+    progressSource.value = source
+    progressCurrent.value = i
+
+    try {
+      const result = await api.runSource(source)
+      progressResults.value.push({ source, data: result.data })
+    } catch (err) {
+      progressErrors.value.push({ source, error: err.message })
+    }
   }
+
+  progressCurrent.value = sources.length
+  progressSource.value = ''
+
+  // Refresh dashboard data
+  try {
+    await loadAll({ force: true })
+  } catch {}
+
+  // Keep summary visible for a moment, then reset
+  setTimeout(() => {
+    progressActive.value = false
+    running.value = false
+  }, 3000)
 }
 
 async function sendReport() {
@@ -71,7 +129,7 @@ async function sendReport() {
         <h2>{{ t('dashboard.title') }}</h2>
       </div>
       <div class="button-row">
-        <button class="secondary-button" :disabled="running" @click="runNow">
+        <button class="secondary-button" :disabled="running" @click="updateAllSources">
           {{ running ? t('dashboard.updating') : t('dashboard.updateOffers') }}
         </button>
         <button class="primary-button" :disabled="sending || pendingJobsCount === 0" @click="sendReport">
@@ -81,6 +139,35 @@ async function sendReport() {
     </div>
 
     <p v-if="visibleError" class="notice notice--error">{{ visibleError }}</p>
+
+    <!-- Progress bar -->
+    <div v-if="progressActive || progressResults.length > 0" class="progress-container">
+      <div class="progress-header">
+        <span class="progress-label">
+          {{ progressActive
+            ? t('dashboard.updatingSource', { source: progressSource, current: progressCurrent + 1, total: progressTotal })
+            : progressSummary
+          }}
+        </span>
+        <span class="progress-percent">{{ progressPercent }}%</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
+      </div>
+      <div v-if="progressErrors.length > 0" class="progress-errors">
+        <span v-for="err in progressErrors" :key="err.source" class="progress-error-tag">
+          {{ err.source }}: {{ err.error }}
+        </span>
+      </div>
+      <div v-if="!progressActive && progressResults.length > 0" class="progress-done">
+        {{ t('dashboard.updatingDone', {
+          total: progressResults.length,
+          errors: progressErrors.length,
+          new: progressResults.reduce((s, r) => s + (r.data?.new || 0), 0),
+        }) }}
+      </div>
+    </div>
+
     <p v-if="loading" class="notice">{{ t('dashboard.loading') }}</p>
 
     <template v-else>
@@ -186,3 +273,70 @@ async function sendReport() {
     </template>
   </section>
 </template>
+
+<style scoped>
+.progress-container {
+  margin: 16px 0;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.progress-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #334155;
+}
+
+.progress-percent {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #3b82f6;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.progress-errors {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.progress-error-tag {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  background: #fef2f2;
+  color: #dc2626;
+  border-radius: 4px;
+  border: 1px solid #fecaca;
+}
+
+.progress-done {
+  margin-top: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #16a34a;
+}
+</style>

@@ -227,6 +227,44 @@ final class ApiController
         ];
     }
 
+    public function runSource(string $sourceKey): array
+    {
+        $allowedSources = ['unnc', 'chinajob', 'hiredchina', 'jobscina', 'echinacities', 'higheredjobs', 'jooble', 'chinateachjobs', 'chinauniversityjobs'];
+
+        if (!in_array($sourceKey, $allowedSources, true)) {
+            http_response_code(400);
+
+            return [
+                'success' => false,
+                'error' => "Fuente no válida: {$sourceKey}",
+            ];
+        }
+
+        try {
+            $result = $this->runJobsService->runSource($sourceKey);
+
+            return [
+                'success' => true,
+                'data' => $result,
+            ];
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(404);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        } catch (\Throwable $e) {
+            http_response_code(500);
+
+            return [
+                'success' => false,
+                'error' => 'Error interno al ejecutar scraper',
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
     public function sendPendingReport(): array
     {
         $summary = $this->runJobsService->sendPendingReport('manual-dashboard-send');
