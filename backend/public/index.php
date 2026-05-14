@@ -105,7 +105,7 @@ if ($method === 'POST' && preg_match('#^/jobs/([^/]+)/reject$#', $path, $matches
 }
 
 // POST /api/run/{source} — run a single scraper
-if ($method === 'POST' && preg_match('#^/api/run/([^/]+)$#', $path, $matches) === 1) {
+if ($method === 'POST' && preg_match('#^/run/([^/]+)$#', $path, $matches) === 1) {
     $sourceKey = urldecode((string) ($matches[1] ?? ''));
     try {
         $response = $controller->runSource($sourceKey);

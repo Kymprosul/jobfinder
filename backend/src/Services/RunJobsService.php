@@ -241,6 +241,20 @@ final class RunJobsService
             throw new \InvalidArgumentException("Fuente desconocida: {$sourceKey}");
         }
 
+        if (!(bool) ($sourceConfig['enabled'] ?? false)) {
+            return [
+                'success' => true,
+                'source' => $sourceKey,
+                'status' => 'disabled',
+                'jobs_count' => 0,
+                'accepted' => 0,
+                'new' => 0,
+                'duplicates' => 0,
+                'message' => "Fuente desactivada en configuración.",
+                'duration_ms' => 0,
+            ];
+        }
+
         $scraper = null;
         foreach ($this->scrapers as $s) {
             if ($s->getSourceKey() === $sourceKey) {
