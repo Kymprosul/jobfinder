@@ -295,6 +295,20 @@ async function sendReport() {
               <td>{{ item.jobs_count }}</td>
               <td>{{ item.message || t('common.noDetails') }}</td>
             </tr>
+            <tr v-for="item in status?.playwright_sources || []" :key="item.source">
+              <td>
+                <span>{{ item.source }}</span>
+                <span class="scraper-badge">VPS</span>
+              </td>
+              <td>
+                <StatusBadge
+                  :label="statusLabel(item.status)"
+                  :tone="item.status === 'ok' ? 'success' : 'neutral'"
+                />
+              </td>
+              <td>{{ item.jobs_count }}</td>
+              <td>{{ item.message }}</td>
+            </tr>
           </tbody>
         </table>
       </section>
@@ -366,5 +380,19 @@ async function sendReport() {
   font-size: 0.875rem;
   font-weight: 500;
   color: #16a34a;
+}
+
+.scraper-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #ede9fe;
+  color: #7c3aed;
+  border-radius: 4px;
+  vertical-align: middle;
 }
 </style>

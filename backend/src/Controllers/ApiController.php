@@ -306,6 +306,9 @@ final class ApiController
         $lastSent = $sentJobs[0]['sent_at'] ?? null;
         $sources = $this->configService->get()['sources'] ?? [];
 
+        // Playwright source stats from imported jobs
+        $playwrightSources = $this->getPlaywrightSourceResults($jobs);
+
         return [
             'success' => true,
             'data' => [
@@ -319,8 +322,50 @@ final class ApiController
                     $sources,
                     static fn (array $source): bool => (bool) ($source['enabled'] ?? false)
                 )),
+                'playwright_sources' => $playwrightSources,
             ],
         ];
+    }
+
+    private function getPlaywrightSourceResults(array $jobs): array
+    {
+        $sourceJobs = [];
+
+        foreach ($jobs as $job) {
+            $source = trim((string) ($job['source'] ?? ''));
+            if (!str_starts_with($source, 'playwright')) {
+                continue;
+            }
+
+            if (!isset($sourceJobs[$source])) {
+                $sourceJobs[$source] = [
+                    'jobs_count' => 0,
+                    'last_seen' => '',
+                ];
+            }
+
+            $sourceJobs[$source]['jobs_count']++;
+            $lastSeen = $job['last_seen_at'] ?? '';
+            if ($lastSeen > $sourceJobs[$source]['last_seen']) {
+                $sourceJobs[$source]['last_seen'] = $lastSeen;
+            }
+        }
+
+        $results = [];
+        foreach ($sourceJobs as $source => $data) {
+            $results[] = [
+                'source' => $source,
+                'status' => 'ok',
+                'jobs_count' => $data['jobs_count'],
+                'message' => 'Scraper Playwright (VPS)',
+                'last_seen' => $data['last_seen'],
+                'scraper_type' => 'playwright',
+            ];
+        }
+
+        usort($results, static fn (array $a, array $b): int => $b['jobs_count'] <=> $a['jobs_count']);
+
+        return $results;
     }
 
     private function readJsonBody(): array
