@@ -95,8 +95,36 @@ async function updateAllSources() {
   progressCurrent.value = sources.length
   progressSource.value = ''
 
-  // Refresh dashboard data
+  // Build source results for run summary
+  const sourceResults = []
+  for (const r of progressResults.value) {
+    sourceResults.push({
+      source: r.source,
+      status: r.data?.status || 'ok',
+      jobs_count: r.data?.jobs_count || 0,
+      accepted: r.data?.accepted || 0,
+      new: r.data?.new || 0,
+      duplicates: r.data?.duplicates || 0,
+      message: r.data?.message || null,
+      duration_ms: r.data?.duration_ms || 0,
+    })
+  }
+  for (const e of progressErrors.value) {
+    sourceResults.push({
+      source: e.source,
+      status: 'error',
+      jobs_count: 0,
+      accepted: 0,
+      new: 0,
+      duplicates: 0,
+      message: e.error,
+      duration_ms: 0,
+    })
+  }
+
+  // Save run summary and refresh dashboard
   try {
+    await api.completeRun(sourceResults)
     await loadAll({ force: true })
   } catch {}
 

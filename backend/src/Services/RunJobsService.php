@@ -330,6 +330,66 @@ final class RunJobsService
         ];
     }
 
+    public function completeRun(array $sourceResults): array
+    {
+        $now = new \DateTimeImmutable('now');
+        $totalAccepted = 0;
+        $totalNew = 0;
+        $totalRaw = 0;
+        $totalDuplicates = 0;
+        $errorCount = 0;
+        $processedCount = 0;
+
+        foreach ($sourceResults as $sr) {
+            if (($sr['status'] ?? '') === 'disabled') {
+                continue;
+            }
+            $processedCount++;
+            $totalRaw += ($sr['jobs_count'] ?? 0);
+            $totalAccepted += ($sr['accepted'] ?? 0);
+            $totalNew += ($sr['new'] ?? 0);
+            $totalDuplicates += ($sr['duplicates'] ?? 0);
+            if (!in_array($sr['status'] ?? '', ['ok', 'empty', 'partial', 'disabled'], true)) {
+                $errorCount++;
+            }
+        }
+
+        $jobs = $this->storage->load('jobs', []);
+        $pendingCount = count(array_filter(
+            $jobs,
+            static fn (array $job): bool => !($job['sent'] ?? false)
+        ));
+
+        $summary = [
+            'id' => hash('sha1', $now->format(DATE_ATOM) . 'per_source'),
+            'trigger' => 'manual',
+            'started_at' => $now->format(DATE_ATOM),
+            'finished_at' => $now->format(DATE_ATOM),
+            'duration_ms' => 0,
+            'sources_processed' => $processedCount,
+            'source_results' => $sourceResults,
+            'raw_jobs' => $totalRaw,
+            'accepted_jobs' => $totalAccepted,
+            'accepted_jobs_by_search' => [],
+            'new_jobs_count' => $totalNew,
+            'new_jobs_by_search' => [],
+            'duplicates_discarded' => $totalDuplicates,
+            'discarded' => ['irrelevant' => 0, 'too_old' => 0],
+            'errors' => $errorCount,
+            'email_sent' => false,
+            'pending_jobs_count' => $pendingCount,
+        ];
+
+        $runs = $this->storage->load('runs', []);
+        $runs[] = $summary;
+        $this->storage->save('runs', array_slice($runs, -200));
+
+        return [
+            'success' => true,
+            'data' => $summary,
+        ];
+    }
+
     public function sendPendingReport(string $trigger = 'manual-send'): array
     {
         return $this->logger->withContext([

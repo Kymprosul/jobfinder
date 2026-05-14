@@ -70,6 +70,7 @@ $registerRoute('GET', '/api/preview', [$controller, 'getPreviewJobs']);
 $registerRoute('GET', '/api/runs', [$controller, 'getRuns']);
 $registerRoute('GET', '/api/logs', [$controller, 'getLogs']);
 $registerRoute('POST', '/api/run', [$controller, 'runNow']);
+$registerRoute('POST', '/api/run/complete', [$controller, 'completeRun']);
 $registerRoute('POST', '/api/send-report', [$controller, 'sendPendingReport']);
 $registerRoute('POST', '/api/import', [$controller, 'importJobs']);
 $registerRoute('POST', '/api/jobs/{id}/reject', [$controller, 'rejectJob']);
@@ -102,6 +103,24 @@ if ($method === 'POST' && preg_match('#^/api/jobs/([^/]+)/reject$#', $path, $mat
 
 if ($method === 'POST' && preg_match('#^/jobs/([^/]+)/reject$#', $path, $matches) === 1) {
     $handleRejectRoute(urldecode((string) ($matches[1] ?? '')));
+}
+
+// POST /api/run/complete — finalize per-source run
+if ($method === 'POST' && preg_match('#^/run/complete$#', $path) === 1) {
+    try {
+        $response = $controller->completeRun();
+        http_response_code($response['status'] ?? 200);
+        unset($response['status']);
+        echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    } catch (Throwable $exception) {
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Error interno del servidor',
+            'message' => $appDebug ? $exception->getMessage() : null,
+        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    }
+    exit;
 }
 
 // POST /api/run/{source} — run a single scraper

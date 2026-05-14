@@ -92,6 +92,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({}),
     }),
+  completeRun: (sourceResults) =>
+    request('/api/run/complete', {
+      method: 'POST',
+      body: JSON.stringify({ source_results: sourceResults }),
+    }),
   sendReport: () =>
     request('/api/send-report', {
       method: 'POST',

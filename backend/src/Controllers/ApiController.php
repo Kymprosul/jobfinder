@@ -265,6 +265,23 @@ final class ApiController
         }
     }
 
+    public function completeRun(): array
+    {
+        $payload = $this->readJsonBody();
+        $sourceResults = $payload['source_results'] ?? [];
+
+        if (!is_array($sourceResults) || $sourceResults === []) {
+            http_response_code(400);
+
+            return [
+                'success' => false,
+                'error' => 'source_results requerido',
+            ];
+        }
+
+        return $this->runJobsService->completeRun($sourceResults);
+    }
+
     public function sendPendingReport(): array
     {
         $summary = $this->runJobsService->sendPendingReport('manual-dashboard-send');
