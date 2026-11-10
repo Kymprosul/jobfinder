@@ -219,7 +219,7 @@ final class ChinaTeachJobsScraper extends AbstractScraper
 
     private function fetchMirrorMarkdown(string $url): string
     {
-        usleep(300000);
+        usleep(500000);
         $mirrorUrl = self::MIRROR_PREFIX . preg_replace('/^https?:\/\//i', '', $url);
 
         try {
@@ -230,7 +230,7 @@ final class ChinaTeachJobsScraper extends AbstractScraper
                 throw $exception;
             }
 
-            usleep(1200000);
+            usleep(2000000);
 
             return $this->fetchHtml($mirrorUrl);
         }

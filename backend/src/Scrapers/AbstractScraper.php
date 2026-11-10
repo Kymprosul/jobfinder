@@ -132,6 +132,8 @@ abstract class AbstractScraper implements ScraperInterface
             'bot verification',
             'cloudflare',
             'incapsula',
+            'performing security verification',
+            'security verification',
         ];
         foreach ($textNeedles as $needle) {
             if (str_contains($haystack, $needle)) {

@@ -493,8 +493,20 @@ final class ChinaUniversityJobsScraper extends AbstractScraper
 
     private function fetchMirrorMarkdown(string $url): string
     {
+        usleep(500000);
         $mirrorUrl = self::MIRROR_PREFIX . preg_replace('/^https?:\/\//i', '', $url);
-        return $this->fetchHtml($mirrorUrl);
+        try {
+            return $this->fetchHtml($mirrorUrl);
+        } catch (\App\Utils\BlockedSourceException $exception) {
+            $isRateLimited = str_contains($exception->getMessage(), '[429]');
+            if (!$isRateLimited) {
+                throw $exception;
+            }
+
+            usleep(2000000);
+
+            return $this->fetchHtml($mirrorUrl);
+        }
     }
 
     private function nextMeaningfulLine(array $lines, int $start): array
