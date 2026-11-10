@@ -14,6 +14,13 @@ use Symfony\Component\DomCrawler\Crawler;
 
 abstract class AbstractScraper implements ScraperInterface
 {
+    private static array $uaPool = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15',
+        'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/121.0',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
+    ];
+
     protected Client $client;
 
     public function __construct(protected readonly LoggerService $logger)
@@ -24,7 +31,7 @@ abstract class AbstractScraper implements ScraperInterface
             'http_errors' => false,
             'verify' => filter_var($_ENV['HTTP_VERIFY_SSL'] ?? 'false', FILTER_VALIDATE_BOOL),
             'headers' => [
-                'User-Agent' => 'Mozilla/5.0 (compatible; JobfinderBot/1.0; +https://localhost)',
+                'User-Agent' => self::$uaPool[array_rand(self::$uaPool)],
                 'Accept-Language' => 'en-US,en;q=0.9',
             ],
         ]);
@@ -32,29 +39,38 @@ abstract class AbstractScraper implements ScraperInterface
 
     protected function fetchHtml(string $url): string
     {
-        try {
-            $response = $this->client->get($url);
-            $statusCode = $response->getStatusCode();
-            $html = (string) $response->getBody();
-        } catch (GuzzleException $exception) {
-            $fallback = $this->fetchHtmlViaCurl($url);
-            if ($fallback === null) {
-                throw new HttpException($exception->getMessage(), 0, $exception);
+        $attempt = 0;
+        do {
+            try {
+                $response = $this->client->get($url);
+                $statusCode = $response->getStatusCode();
+                $html = (string) $response->getBody();
+            } catch (GuzzleException $exception) {
+                $fallback = $this->fetchHtmlViaCurl($url);
+                if ($fallback === null) {
+                    throw new HttpException($exception->getMessage(), 0, $exception);
+                }
+
+                $statusCode = $fallback['status'];
+                $html = $fallback['body'];
             }
 
-            $statusCode = $fallback['status'];
-            $html = $fallback['body'];
-        }
+            if (in_array($statusCode, [403, 429, 503], true) || $this->looksBlocked($html)) {
+                $attempt++;
+                if ($attempt >= 2) {
+                    throw new BlockedSourceException(sprintf('Fuente bloqueada o protegida [%s]', $statusCode));
+                }
+                // Exponential backoff: 2s then 4s
+                usleep((int) pow(2, $attempt) * 1_000_000);
+                continue;
+            }
 
-        if (in_array($statusCode, [403, 429, 503], true) || $this->looksBlocked($html)) {
-            throw new BlockedSourceException(sprintf('Fuente bloqueada o protegida [%s]', $statusCode));
-        }
+            if ($statusCode >= 400 || trim($html) === '') {
+                throw new HttpException(sprintf('Respuesta HTTP no usable [%s]', $statusCode));
+            }
 
-        if ($statusCode >= 400 || trim($html) === '') {
-            throw new HttpException(sprintf('Respuesta HTTP no usable [%s]', $statusCode));
-        }
-
-        return $html;
+            return $html;
+        } while (true);
     }
 
     protected function fetchCrawler(string $url): Crawler
@@ -105,20 +121,27 @@ abstract class AbstractScraper implements ScraperInterface
 
     protected function looksBlocked(string $html): bool
     {
-        $needles = [
-            'captcha',
-            'incapsula',
+        $haystack = strtolower($html);
+
+        // Textos típicos de Cloudflare / Incapsula / Captcha
+        $textNeedles = [
+            'just a moment',
+            'verify you are human',
             'access denied',
             'request unsuccessful',
             'bot verification',
             'cloudflare',
+            'incapsula',
         ];
-
-        $haystack = strtolower($html);
-        foreach ($needles as $needle) {
+        foreach ($textNeedles as $needle) {
             if (str_contains($haystack, $needle)) {
                 return true;
             }
+        }
+
+        // Captcha visible: iframe con src que muestre reCAPTCHA/hCaptcha
+        if (preg_match('/<iframe[^>]+src=["\'][^"]*(?:recaptcha|hcaptcha|captcha)[^"\']+/i', $html) === 1) {
+            return true;
         }
 
         return false;
